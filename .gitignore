@@ -1,0 +1,41 @@
+# Vivado auto-generated directories
+*.cache/
+*.runs/
+*.hw/
+*.ip_user_files/
+*.sim/
+*.sdk/
+.Xil/
+.Xilinx/
+
+# Vivado log and journal files
+*.jou
+*.log
+*.str
+*.debug
+*.tmp
+*.rst
+
+# Implementation/Synthesis artifacts
+*.dcp
+*.pb
+*.rpx
+*.rpt
+*.vdi
+*.vds
+*.hwdef
+*.wdf
+*.dmp
+
+# Generated simulation/stub files
+*_stub.v
+*_stub.vhdl
+*_funcsim.v
+*_funcsim.vhdl
+
+# OS and IDE junk
+.DS_Store
+Thumbs.db
+.settings/
+.project
+.cproject
