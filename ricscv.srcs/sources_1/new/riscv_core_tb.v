@@ -66,9 +66,9 @@ module riscv_core_tb;
         $finish;
     end
 
-    // Monitor internal registers for curiosity (Optional - depends on internal signal names)
-    // initial begin
-    //    $monitor("Time: %t | PC: %h | Register x3: %h", $time, dut.if1_pc, dut.rf.regs[3]);
-    // end
+    initial begin
+       $monitor("Time: %t | PC_IF1: %h | PC_EX2: %h | instr_EX2: %h | x3: %d | x4: %d | x5: %d | uart_busy: %b", 
+                $time, dut.if1_pc, dut.ex2_pc, dut.ex2_instr, dut.rf.regs[3], dut.rf.regs[4], dut.rf.regs[5], dut.uart_tx_busy);
+    end
 
 endmodule

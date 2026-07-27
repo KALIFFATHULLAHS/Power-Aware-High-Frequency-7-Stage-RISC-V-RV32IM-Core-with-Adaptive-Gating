@@ -20,8 +20,11 @@ module register_file (
             regs[waddr] <= wdata;
     end
 
-    // READ (asynchronous)
-    assign rdata1 = (raddr1 == 5'd0) ? 32'd0 : regs[raddr1];
-    assign rdata2 = (raddr2 == 5'd0) ? 32'd0 : regs[raddr2];
+    // READ (asynchronous with write-first bypass)
+    assign rdata1 = (we && waddr != 5'd0 && waddr == raddr1) ? wdata : 
+                    (raddr1 == 5'd0) ? 32'd0 : regs[raddr1];
+    assign rdata2 = (we && waddr != 5'd0 && waddr == raddr2) ? wdata : 
+                    (raddr2 == 5'd0) ? 32'd0 : regs[raddr2];
+
 
 endmodule

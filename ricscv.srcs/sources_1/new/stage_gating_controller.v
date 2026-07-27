@@ -53,26 +53,21 @@ module stage_gating_controller (
         ce_mem = pmode[5];
         ce_wb  = pmode[6];
 
-        ce_mul    = pmode[4] & is_mul;
-        ce_div    = pmode[4] & is_div;
+        ce_mul    = pmode[4] & (is_mul | mul_busy);
+        ce_div    = pmode[4] & (is_div | div_busy);
         ce_approx = pmode[4] & is_approx;
 
         ce_uart = pmode[7];
         ce_csr  = 1'b1; // Always alive for interrupt wake
 
         //----------------------------
-        // STALLS
+        // STALLS (Pipeline registers hold values via !stall checks)
         //----------------------------
         if (stall_if)
             ce_if1 = 0;
 
         if (stall_id)
             ce_if2 = 0;
-
-        if (stall_ex) begin
-            ce_ex1 = 0;
-            ce_ex2 = 0;
-        end
 
         //----------------------------
         // FLUSH

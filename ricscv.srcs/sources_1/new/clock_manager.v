@@ -74,10 +74,10 @@ module clock_manager (
     wire locked;
 
     MMCME2_BASE #(
-        .CLKIN1_PERIOD(10.0),
-        .CLKFBOUT_MULT_F(10.0),
+        .CLKIN1_PERIOD(20.0),
+        .CLKFBOUT_MULT_F(20.0),
         .DIVCLK_DIVIDE(1),
-        .CLKOUT0_DIVIDE_F(10.0)
+        .CLKOUT0_DIVIDE_F(20.0)
     ) mmcm_inst (
         .CLKIN1 (clk_in),
         .CLKFBIN(clk_fb),
@@ -87,11 +87,11 @@ module clock_manager (
 
         .LOCKED(locked),
 
-        .RST(reset),
+        .RST(1'b0),
         .PWRDWN(1'b0)
     );
 
-    assign clk_sys = clk_mmcm_out;
+    BUFG buf_sys (.I(clk_mmcm_out), .O(clk_sys));
 
     // Registered enables
     reg ce_if1_r, ce_if2_r, ce_id_r, ce_ex1_r, ce_ex2_r, ce_mem_r, ce_wb_r;

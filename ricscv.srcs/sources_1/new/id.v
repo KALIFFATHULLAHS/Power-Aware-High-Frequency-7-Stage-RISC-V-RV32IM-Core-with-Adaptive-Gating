@@ -8,6 +8,7 @@ module id (
     input  wire [31:0] id_pc_in,
     input  wire [31:0] id_instr_in,
     input  wire        id_valid_in,
+    input  wire [31:0] id_pred_pc,
 
     // Hazard control
     input  wire        stall_id,
@@ -28,6 +29,7 @@ module id (
     output reg  [31:0] ex1_instr,
     output reg         ex1_valid,
     output reg  [23:0] ex1_ctrl_bus,
+    output reg  [31:0] ex1_pred_pc,
 
     // Instruction class → Power gating controller
     output reg is_branch,
@@ -106,11 +108,13 @@ module id (
             7'b0000011: begin // Load
                 ctrl_bus_dec[15] = 1'b1; // reg_write
                 ctrl_bus_dec[14] = 1'b1; // mem_read
-                ctrl_bus_dec[10:8] = funct3; 
+                ctrl_bus_dec[22:20] = funct3; 
+                ctrl_bus_dec[8]  = 1'b1; // alu_src_b (always imm for Load address)
             end
             7'b0100011: begin // Store
                 ctrl_bus_dec[13] = 1'b1; // mem_write
-                ctrl_bus_dec[10:8] = funct3;
+                ctrl_bus_dec[22:20] = funct3;
+                ctrl_bus_dec[8]  = 1'b1; // alu_src_b (always imm for Store address)
             end
             7'b1100011: begin // Branch
                 ctrl_bus_dec[12] = 1'b1; 
@@ -148,13 +152,14 @@ module id (
             ex1_rd       <= 5'b0;
             ex1_imm      <= 32'b0;
             ex1_instr    <= 32'b0;
-            ex1_ctrl_bus <= 16'b0;
+            ex1_ctrl_bus <= 24'b0;
             ex1_valid    <= 1'b0;
+            ex1_pred_pc  <= 32'b0;
         end
         else if (flush_id) begin
             ex1_valid    <= 1'b0;
         end
-        else if (!stall_id && id_valid_in) begin
+        else if (!stall_id) begin
             ex1_pc       <= id_pc_in;
             ex1_rs1      <= rs1_data;
             ex1_rs2      <= rs2_data;
@@ -162,7 +167,8 @@ module id (
             ex1_imm      <= imm;
             ex1_instr    <= id_instr_in;
             ex1_ctrl_bus <= ctrl_bus_dec;   // ✅ load decoded control
-            ex1_valid    <= 1'b1;
+            ex1_valid    <= id_valid_in;    // Correct: propagate valid bit when not stalled
+            ex1_pred_pc  <= id_pred_pc;
         end
     end
 endmodule

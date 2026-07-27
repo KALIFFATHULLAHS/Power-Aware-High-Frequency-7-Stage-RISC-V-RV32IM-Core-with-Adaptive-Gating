@@ -22,7 +22,6 @@ module div_unit (
         if (reset) begin
             busy <= 0;
             count <= 0;
-            result <= 0;
         end
         else if (start && !busy) begin
             busy <= 1;
@@ -57,14 +56,17 @@ module div_unit (
                 end
                 count <= count - 1;
             end else begin
-                case (op_type)
-                    3'b100, 3'b101: result <= neg_q ? -dividend[31:0] : dividend[31:0]; // DIV/DIVU
-                    3'b110, 3'b111: result <= neg_r ? -dividend[63:32] : dividend[63:32]; // REM/REMU
-                    default: result <= 0;
-                endcase
                 busy <= 0;
             end
         end
+    end
+
+    always @(*) begin
+        case (op_type)
+            3'b100, 3'b101: result = neg_q ? -dividend[31:0] : dividend[31:0]; // DIV/DIVU
+            3'b110, 3'b111: result = neg_r ? -dividend[63:32] : dividend[63:32]; // REM/REMU
+            default:        result = 0;
+        endcase
     end
 
 endmodule

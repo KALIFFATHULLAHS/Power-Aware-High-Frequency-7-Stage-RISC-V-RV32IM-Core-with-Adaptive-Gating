@@ -3,6 +3,7 @@ module bram_imem(
     input  wire [13:0] addr,
     output reg  [31:0] rdata,
 
+    input  wire        reset,        // Reset signal for bootloader
     input  wire        uart_clk,     // UART clock
     input  wire        uart_rx,
     output wire        uart_tx       // not used here but kept if needed
@@ -11,9 +12,12 @@ module bram_imem(
     // 4K words (16KB)
     (* ram_style = "block" *) reg [31:0] mem [0:4095];
 
+    integer i;
     initial begin
-        $readmemh("program.mem", mem);
-        $display("[BRAM] Memory loaded with 'program.mem' successfully.");
+        for (i = 0; i < 4096; i = i + 1) begin
+            mem[i] = 32'h00000013; // Initialize entire memory to RISC-V NOPs (addi x0, x0, 0)
+        end
+        $display("[BRAM] Memory initialized with NOPs successfully.");
     end
 
     //--------------------------------------------------
@@ -31,7 +35,7 @@ module bram_imem(
     wire       rx_valid;
 
   uart_rx #(
-    .CLK_FREQ(100_000_000),
+    .CLK_FREQ(50_000_000),
     .BAUD_RATE(115200)
 ) u_rx (
     .clk(uart_clk),
@@ -46,10 +50,15 @@ module bram_imem(
     reg        we_uart       = 0;
     assign uart_tx = 1'b1;
 
+    reg prev_reset = 0;
+
     always @(posedge uart_clk) begin
+        prev_reset <= reset;
         we_uart <= 0;
 
-        if (rx_valid) begin
+        if (reset && !prev_reset) begin
+            byte_cnt <= 0;
+        end else if (rx_valid) begin
             assemble_word <= {rx_byte, assemble_word[31:8]};
             byte_cnt <= byte_cnt + 1;
 
@@ -64,7 +73,9 @@ module bram_imem(
     // PORT B: UART WRITE PORT (clk_uart)
     //--------------------------------------------------
     always @(posedge uart_clk) begin
-        if (we_uart) begin
+        if (reset && !prev_reset) begin
+            load_addr <= 0;
+        end else if (we_uart) begin
             mem[load_addr] <= assemble_word;
             load_addr <= load_addr + 1;
         end

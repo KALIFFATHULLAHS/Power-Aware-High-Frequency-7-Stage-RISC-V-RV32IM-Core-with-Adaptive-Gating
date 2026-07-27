@@ -20,6 +20,11 @@ module forwarding_unit (
     input  wire [4:0]  wb_rd,
     input  wire [31:0] wb_result,
 
+    // RF Write (post-WB) forwarding path
+    input  wire        rf_we,
+    input  wire [4:0]  rf_waddr,
+    input  wire [31:0] rf_wdata,
+
     // Original register file outputs
     input  wire [31:0] original_rs1,
     input  wire [31:0] original_rs2,
@@ -39,6 +44,8 @@ module forwarding_unit (
             fwd_rs1_val = mem_result;
         else if (wb_valid && wb_rd != 0 && wb_rd == id_rs1)
             fwd_rs1_val = wb_result;
+        else if (rf_we && rf_waddr != 0 && rf_waddr == id_rs1)
+            fwd_rs1_val = rf_wdata;
         else
             fwd_rs1_val = original_rs1;
 
@@ -51,6 +58,8 @@ module forwarding_unit (
             fwd_rs2_val = mem_result;
         else if (wb_valid && wb_rd != 0 && wb_rd == id_rs2)
             fwd_rs2_val = wb_result;
+        else if (rf_we && rf_waddr != 0 && rf_waddr == id_rs2)
+            fwd_rs2_val = rf_wdata;
         else
             fwd_rs2_val = original_rs2;
     end

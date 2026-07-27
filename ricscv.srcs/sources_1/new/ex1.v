@@ -13,6 +13,7 @@ module ex1 (
     input  wire [31:0] id_imm,
     input  wire [4:0]  id_rd,
     input  wire [23:0] id_ctrl_bus,
+    input  wire [31:0] ex1_pred_pc,
 
     // After Forwarding
     input  wire [31:0] fwd_rs1_val,
@@ -21,6 +22,9 @@ module ex1 (
     // Hazard control
     input  wire        stall_ex1,
     input  wire        flush_ex1,
+
+    // DIV state
+    input  wire        div_busy,
 
     // Outputs to EX2
     output reg         ex2_valid,
@@ -31,6 +35,7 @@ module ex1 (
     output reg [31:0]  ex2_instr,
     output reg [4:0]   ex2_rd,
     output reg [23:0]  ex2_ctrl_bus,
+    output reg [31:0]  ex2_pred_pc,
 
     // Branch resolution
     output reg         branch_taken,
@@ -107,12 +112,16 @@ module ex1 (
             branch_taken    <= 0;
             branch_target   <= 0;
             ex2_store_data  <= 0;
+            ex2_pred_pc     <= 0;
         end
         else if (flush_ex1) begin
             ex2_valid     <= 0;      // bubble
             mul_start     <= 0;
             div_start     <= 0;
             branch_taken  <= 0;
+        end
+        else if (div_busy) begin
+            div_start     <= 0;      // Clear start pulse when divider becomes busy
         end
         else if (!stall_ex1) begin
             ex2_valid    <= ex1_valid_in;
@@ -131,6 +140,7 @@ module ex1 (
 
             mul_start <= is_muldiv && !id_ctrl_bus[18]; // bit 18 of ctrl is funct3[2]
             div_start <= is_muldiv &&  id_ctrl_bus[18];
+            ex2_pred_pc <= ex1_pred_pc;
         end
     end
 

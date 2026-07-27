@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 
-module wb_stage (
+    module wb_stage (
     input  wire        clk_wb,
     input  wire        reset,
 
@@ -36,8 +36,6 @@ module wb_stage (
         else if (wb_valid_in) begin
             if (is_wfi)
                 wfi_active <= 1'b1;
-            else
-                wfi_active <= 1'b0;
         end
     end
 

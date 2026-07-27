@@ -8,9 +8,9 @@ module if1 (
     input  wire        stall_if,
     input  wire        flush_if,
 
-    // Branch resolution from EX1
-    input  wire        branch_taken_ex,
-    input  wire [31:0] branch_target_ex,
+    // Branch mispredict feedback from EX2
+    input  wire        branch_mispredict,
+    input  wire [31:0] branch_recovery_pc,
 
     // Predictor feedback
     input  wire [31:0] predicted_pc,
@@ -19,6 +19,7 @@ module if1 (
     // Outputs to IF2
     output reg  [31:0] pc_out,
     output reg         if1_valid,
+    output wire [31:0] if1_pred_pc,
 
     // To instruction memory
     output wire [31:0] imem_addr
@@ -35,9 +36,11 @@ module if1 (
     wire [31:0] pc_next;
 
     assign pc_next =
-        branch_taken_ex      ? branch_target_ex :
-        predicted_valid       ? predicted_pc     :
+        branch_mispredict    ? branch_recovery_pc :
+        predicted_valid       ? predicted_pc       :
                                 pc_reg + 32'd4;
+
+    assign if1_pred_pc = pc_next;
 
     //---------------------------------------------------------
     // PC REGISTER UPDATE (clock-gated domain)
@@ -50,7 +53,7 @@ module if1 (
         end else if (flush_if) begin
             pc_reg    <= pc_next;
             pc_out    <= pc_next;
-            if1_valid <= 1'b0;
+            if1_valid <= 1'b1;  // Correct: next instruction is valid after flush
         end else if (!stall_if) begin
             pc_reg    <= pc_next;
             pc_out    <= pc_next;

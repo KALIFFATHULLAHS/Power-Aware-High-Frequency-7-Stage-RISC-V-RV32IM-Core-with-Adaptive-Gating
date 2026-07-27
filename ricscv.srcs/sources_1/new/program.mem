@@ -1,9 +1,8 @@
-// RV32IM Multi-Test Diagnostic Program
-// 1. ADD: 15 + 7 = 22
-// 2. MUL: 15 * 7 = 105
-// 3. DIV: 15 / 7 = 2
-// 4. REM: 15 % 7 = 1
-// 5. CSR: Read Cycle Count
+// RV32IM Diagnostic Program (Outputs only results, then halts)
+// 1. ADD: 15 + 7 = 22 (0x16)
+// 2. MUL: 15 * 7 = 105 (0x69)
+// 3. DIV: 15 / 7 = 2 (0x02)
+// 4. REM: 15 % 7 = 1 (0x01)
 // Results sent to UART (0xFFFF0000)
 
 FFFF0537
@@ -17,6 +16,4 @@ FFFF0537
 00552023
 0220E333
 00652023
-C00023F3
-00752023
 0000006F

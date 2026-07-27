@@ -13,6 +13,7 @@ module ex2 (
     input  wire [31:0] ex2_imm_in,
     input  wire [4:0]  ex2_rd_in,
     input  wire [23:0] ex2_ctrl_bus_in,
+    input  wire [31:0] ex2_store_data_in,
 
     // MUL/DIV start pulse from EX1
     input  wire        mul_start,
@@ -26,6 +27,7 @@ module ex2 (
     input  wire        mul_busy,
     input  wire [31:0] div_result,
     input  wire        div_busy,
+    input  wire        uart_tx_busy,
 
     // CSR unit
     input  wire [31:0] csr_rdata,
@@ -37,9 +39,13 @@ module ex2 (
     output reg [4:0]   mem_rd,
     output reg [23:0]  mem_ctrl_bus,
     output reg [31:0]  mem_instr,
+    output reg [31:0]  mem_store_data,
 
     // Stall indicator to EX1 / front pipeline
-    output wire        stall_ex2
+    output wire        stall_ex2,
+
+    // Expose combinatorial ALU result for early forwarding
+    output wire [31:0] ex2_comb_result
 );
 
     //-----------------------------------------------------
@@ -54,11 +60,11 @@ module ex2 (
     wire        is_csr  = ex2_ctrl_bus_in[9];
 
     //-----------------------------------------------------
-    // EX2 stall logic for MUL/DIV
+    // EX2 stall logic for MUL/DIV + UART
     //-----------------------------------------------------
-    assign stall_ex2 =
-        (mul_start && mul_busy) ||
-        (div_start && div_busy);
+    wire stall_uart = ex2_valid_in && ex2_ctrl_bus_in[13] && (ex2_comb_result == 32'hFFFF_0000) && uart_tx_busy;
+
+    assign stall_ex2 = div_start || div_busy || stall_uart;
 
     //-----------------------------------------------------
     // ALU Implementation
@@ -98,35 +104,41 @@ module ex2 (
 
     wire [31:0] alu_final = (approx_enable && !ex2_ctrl_bus_in[8]) ? alu_approx : alu_exact;
 
+    wire is_mul_instr = ex2_ctrl_bus_in[23] && !ex2_ctrl_bus_in[18];
+    wire is_div_instr = ex2_ctrl_bus_in[23] &&  ex2_ctrl_bus_in[18];
+
+    wire [31:0] muldiv_result = is_mul_instr ? mul_result : div_result;
+
+    assign ex2_comb_result =
+        (is_jump || is_jalr)  ? (ex2_pc_in + 32'd4) :
+        (ex2_ctrl_bus_in[23]) ? muldiv_result :
+                                alu_final;
+
+
     //-----------------------------------------------------
     // EX2 → MEM pipeline register
     //-----------------------------------------------------
     always @(posedge clk_ex2 or posedge reset) begin
         if (reset) begin
-            mem_valid    <= 0;
-            mem_result   <= 32'd0;
-            mem_pc       <= 32'd0;
-            mem_rd       <= 5'd0;
-            mem_ctrl_bus <= 24'd0;
-            mem_instr    <= 32'd0;
+            mem_valid      <= 0;
+            mem_result     <= 32'd0;
+            mem_pc         <= 32'd0;
+            mem_rd         <= 5'd0;
+            mem_ctrl_bus   <= 24'd0;
+            mem_instr      <= 32'd0;
+            mem_store_data <= 32'd0;
         end 
         else if (!stall_ex2 && ex2_valid_in) begin
-            mem_valid    <= 1;
-            mem_pc       <= ex2_pc_in;
-            mem_rd       <= ex2_rd_in;
-            mem_ctrl_bus <= ex2_ctrl_bus_in;
-            mem_instr    <= ex2_instr_in;
-
-            if (is_jump || is_jalr)
-                mem_result <= ex2_pc_in + 4;
-            else if (mul_start)
-                mem_result <= mul_result;
-            else if (div_start)
-                mem_result <= div_result;
-            else
-                mem_result <= alu_final;
+            mem_valid      <= 1;
+            mem_pc         <= ex2_pc_in;
+            mem_rd         <= ex2_rd_in;
+            mem_ctrl_bus   <= ex2_ctrl_bus_in;
+            mem_instr      <= ex2_instr_in;
+            mem_store_data <= ex2_store_data_in;
+            mem_result     <= ex2_comb_result;
         end else begin
-            mem_valid <= 0;
+            mem_valid      <= 0;
+            mem_store_data <= 32'd0;
         end
     end
 

@@ -44,7 +44,7 @@ module mem_stage (
         store_data = 0;
         store_strb = 0;
 
-        case (ex2_ctrl_bus[10:8])   // funct3 for store
+        case (ex2_ctrl_bus[22:20])   // funct3 for store
     3'b000: begin // SB
         store_strb = (4'b0001 << ex2_result[1:0]);
         store_data = {4{ex2_op_b[7:0]}};
@@ -70,7 +70,7 @@ endcase
     reg [31:0] load_data;
 
     always @(*) begin
-       case (ex2_ctrl_bus[10:8])  // funct3 for load
+       case (ex2_ctrl_bus[22:20])  // funct3 for load
     3'b000: begin // LB
         case (ex2_result[1:0])
             2'b00: load_data = {{24{mem_rdata[7]}},  mem_rdata[7:0]};

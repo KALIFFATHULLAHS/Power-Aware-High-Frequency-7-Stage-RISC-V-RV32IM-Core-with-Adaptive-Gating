@@ -16,13 +16,13 @@ module hazard_unit (
     input  wire [4:0]  ex2_rd,
     input  wire        ex2_mem_read,
 
-    // New: MUL/DIV + branch
+    // Structural stalls
     input  wire        mul_busy,
     input  wire        div_busy,
-    input  wire        branch_taken_ex1,
-    input  wire        predicted_valid,
-    input  wire [31:0] predicted_pc,
-    input  wire [31:0] branch_target,
+    input  wire        stall_ex2,
+
+    // Branch misprediction control
+    input  wire        branch_mispredict,
 
     // Control outputs
     output reg         stall_if,
@@ -55,14 +55,7 @@ module hazard_unit (
     wire muldiv_stall = mul_busy | div_busy;
 
     //===============================================
-    // 3. BRANCH MISPREDICT HAZARD
-    //===============================================
-    wire branch_mispredict =
-        branch_taken_ex1 &&
-        (branch_target != predicted_pc);
-
-    //===============================================
-    // 4. FINAL STALL/FLUSH LOGIC
+    // 3. FINAL STALL/FLUSH LOGIC
     //===============================================
     always @(*) begin
         // Default signals
@@ -86,6 +79,15 @@ module hazard_unit (
         // MUL/DIV => Structural stall
         //-------------------------------------------
         if (muldiv_stall) begin
+            stall_if  = 1;
+            stall_id  = 1;
+            stall_ex1 = 1;
+        end
+
+        //-------------------------------------------
+        // EX2 STALL (from UART or Divider) => Stall all earlier stages
+        //-------------------------------------------
+        if (stall_ex2) begin
             stall_if  = 1;
             stall_id  = 1;
             stall_ex1 = 1;
