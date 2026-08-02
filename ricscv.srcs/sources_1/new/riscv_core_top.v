@@ -337,6 +337,10 @@ hazard_unit hazard (
     .ex2_rd(ex2_rd),
     .ex2_mem_read(ex2_ctrl_bus[14]),
 
+    .mem_valid(mem_valid),
+    .mem_rd(mem_rd),
+    .mem_mem_read(mem_ctrl_bus[14]),
+
     .stall_if(stall_if),
     .stall_id(stall_id),
     .stall_ex1(stall_ex1),

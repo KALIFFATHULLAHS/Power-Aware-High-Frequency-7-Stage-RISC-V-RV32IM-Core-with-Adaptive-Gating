@@ -6,7 +6,7 @@ COM_PORT = "COM3"
 BAUD_RATE = 115200
 
 # =====================================================================
-# RISC-V INSTRUCTION ENCODERS (Ensures 100% Correct Encoding)
+# RISC-V INSTRUCTION ENCODERS
 # =====================================================================
 def lui(rd, imm_20bit):
     val = ((imm_20bit & 0xFFFFF) << 12) | ((rd & 0x1F) << 7) | 0x37
@@ -27,6 +27,19 @@ def r_type(rd, rs1, rs2, funct3, funct7):
     val = ((funct7 & 0x7F) << 25) | ((rs2 & 0x1F) << 20) | ((rs1 & 0x1F) << 15) | ((funct3 & 0x7) << 12) | ((rd & 0x1F) << 7) | 0x33
     return [(val >> (8 * i)) & 0xFF for i in range(4)]
 
+def jal(rd, offset_21bit):
+    off = offset_21bit & 0x1FFFFF
+    b20 = (off >> 20) & 1
+    b10_1 = (off >> 1) & 0x3FF
+    b11 = (off >> 11) & 1
+    b19_12 = (off >> 12) & 0xFF
+    val = (b20 << 31) | (b10_1 << 21) | (b11 << 20) | (b19_12 << 12) | ((rd & 0x1F) << 7) | 0x6F
+    return [(val >> (8 * i)) & 0xFF for i in range(4)]
+
+def jalr(rd, rs1, offset_12bit):
+    val = ((offset_12bit & 0xFFF) << 20) | ((rs1 & 0x1F) << 15) | (0 << 12) | ((rd & 0x1F) << 7) | 0x67
+    return [(val >> (8 * i)) & 0xFF for i in range(4)]
+
 WFI_BYTES = [0x73, 0x00, 0x50, 0x10]
 
 def make_program(inst_list):
@@ -36,10 +49,22 @@ def make_program(inst_list):
     return prog
 
 # =====================================================================
-# TEST SUITE DEFINITIONS
+# INDIVIDUAL MODULE FUNCTIONAL TEST SUITE
 # =====================================================================
 TESTS = {
     "1": {
+        "name": "Addition (ADD 60 + 10 = 70 / 0x46)",
+        "expected": "0x46 (Decimal 70)",
+        "bytes": make_program([
+            lui(10, 0xFFFF0),
+            addi(1, 0, 60),
+            addi(2, 0, 10),
+            r_type(3, 1, 2, funct3=0, funct7=0x00), # ADD
+            sw(3, 0, 10),
+            WFI_BYTES
+        ])
+    },
+    "2": {
         "name": "Subtraction (SUB 50 - 20 = 30 / 0x1E)",
         "expected": "0x1E (Decimal 30)",
         "bytes": make_program([
@@ -51,31 +76,7 @@ TESTS = {
             WFI_BYTES
         ])
     },
-    "2": {
-        "name": "Bitwise AND (AND 0x3F & 0x0F = 15 / 0x0F)",
-        "expected": "0x0F (Decimal 15)",
-        "bytes": make_program([
-            lui(10, 0xFFFF0),
-            addi(1, 0, 0x3F),
-            addi(2, 0, 0x0F),
-            r_type(3, 1, 2, funct3=7, funct7=0x00), # AND
-            sw(3, 0, 10),
-            WFI_BYTES
-        ])
-    },
     "3": {
-        "name": "Bitwise OR (OR 0x10 | 0x05 = 21 / 0x15)",
-        "expected": "0x15 (Decimal 21)",
-        "bytes": make_program([
-            lui(10, 0xFFFF0),
-            addi(1, 0, 0x10),
-            addi(2, 0, 0x05),
-            r_type(3, 1, 2, funct3=6, funct7=0x00), # OR
-            sw(3, 0, 10),
-            WFI_BYTES
-        ])
-    },
-    "4": {
         "name": "Bitwise XOR (XOR 0x55 ^ 0x0F = 90 / 0x5A)",
         "expected": "0x5A (Decimal 90)",
         "bytes": make_program([
@@ -87,20 +88,8 @@ TESTS = {
             WFI_BYTES
         ])
     },
-    "5": {
-        "name": "Shift Left Logical (SLL 3 << 3 = 24 / 0x18)",
-        "expected": "0x18 (Decimal 24)",
-        "bytes": make_program([
-            lui(10, 0xFFFF0),
-            addi(1, 0, 3),
-            addi(2, 0, 3),
-            r_type(3, 1, 2, funct3=1, funct7=0x00), # SLL
-            sw(3, 0, 10),
-            WFI_BYTES
-        ])
-    },
-    "6": {
-        "name": "Multiplication (MUL 8 * 9 = 72 / 0x48)",
+    "4": {
+        "name": "Hardware Multiplication (MUL 8 * 9 = 72 / 0x48)",
         "expected": "0x48 (Decimal 72)",
         "bytes": make_program([
             lui(10, 0xFFFF0),
@@ -111,16 +100,41 @@ TESTS = {
             WFI_BYTES
         ])
     },
-    "7": {
-        "name": "Set Less Than (SLT 10 < 20 = 1 / 0x01)",
-        "expected": "0x01 (Decimal 1)",
+    "5": {
+        "name": "Hardware Division (DIV 100 / 4 = 25 / 0x19)",
+        "expected": "0x19 (Decimal 25)",
         "bytes": make_program([
             lui(10, 0xFFFF0),
-            addi(1, 0, 10),
-            addi(2, 0, 20),
-            r_type(3, 1, 2, funct3=2, funct7=0x00), # SLT
+            addi(1, 0, 100),
+            addi(2, 0, 4),
+            r_type(3, 1, 2, funct3=4, funct7=0x01), # DIV
             sw(3, 0, 10),
             WFI_BYTES
+        ])
+    },
+    "6": {
+        "name": "Hardware Remainder (REMU 100 % 7 = 2 / 0x02)",
+        "expected": "0x02 (Decimal 2)",
+        "bytes": make_program([
+            lui(10, 0xFFFF0),
+            addi(1, 0, 100),
+            addi(2, 0, 7),
+            r_type(3, 1, 2, funct3=7, funct7=0x01), # REMU
+            sw(3, 0, 10),
+            WFI_BYTES
+        ])
+    },
+    "7": {
+        "name": "Subroutine Jump & Return (JAL & JALR = 42 / 0x2A)",
+        "expected": "0x2A (Decimal 42)",
+        "bytes": make_program([
+            lui(10, 0xFFFF0),
+            jal(1, 12),                              # JAL to FUNC (+12 bytes)
+            sw(3, 0, 10),                            # Write result to UART
+            WFI_BYTES,
+            # FUNC (at offset +12):
+            addi(3, 0, 42),                          # x3 = 42
+            jalr(0, 1, 0)                            # Return via JALR
         ])
     }
 }
@@ -129,11 +143,11 @@ def main():
     print("==================================================")
     print("      RISC-V PROCESSOR INSTRUCTION TESTER        ")
     print("==================================================")
-    print("Select a test to run:")
+    print("Select a component module test:")
     for k, v in TESTS.items():
         print(f"  [{k}] {v['name']}")
     print("==================================================")
-    
+
     choice = input("Enter choice (1-7) [default=1]: ").strip() or "1"
     if choice not in TESTS:
         print("Invalid choice!")
@@ -159,25 +173,30 @@ def main():
         print("Make sure to CLOSE the VS Code Serial Monitor before running!")
         return
 
-    print(f"Uploading program ({len(program_bytes)} bytes)...")
-    ser.write(program_bytes)
-    ser.flush()
-    print("Upload complete!")
-    print(f"--------------------------------------------------")
-    print("2. Please RELEASE the reset button now.")
-    print("   Waiting for output from FPGA...")
+    try:
+        ser.reset_input_buffer()
+        ser.reset_output_buffer()
 
-    received = ser.read(1)
-    ser.close()
+        print(f"Uploading program ({len(program_bytes)} bytes)...")
+        ser.write(program_bytes)
+        ser.flush()
+        time.sleep(0.1)
+        print("Upload complete!")
+        print("--------------------------------------------------")
+        print("2. Please RELEASE the reset button now.")
+        print("   Waiting for output from FPGA...")
 
-    print(f"--------------------------------------------------")
-    if received:
-        val = received[0]
-        print(f"SUCCESS! Output received from FPGA (Hex): {val:02X}")
-        print(f"Equivalent Decimal value: {val}")
-    else:
-        print("TIMEOUT: No output received from FPGA. Verify bitstream & reset button.")
-    print("==================================================")
+        received = ser.read(1)
+        print("--------------------------------------------------")
+        if received:
+            val = received[0]
+            print(f"SUCCESS! Output received from FPGA (Hex): 0x{val:02X}")
+            print(f"Equivalent Decimal value: {val}")
+        else:
+            print("TIMEOUT: No output received from FPGA.")
+        print("==================================================")
+    finally:
+        ser.close()
 
 if __name__ == "__main__":
     main()

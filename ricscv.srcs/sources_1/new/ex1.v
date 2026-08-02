@@ -45,6 +45,9 @@ module ex1 (
     output reg         mul_start,
     output reg         div_start,
 
+    // Internal pulse latch to prevent re-triggering during pipeline stalls
+    reg                div_started,
+
     // *** FIXED: STORE DATA PATH ***
     output reg [31:0]  ex2_store_data
 );
@@ -120,13 +123,19 @@ module ex1 (
             ex2_branch_target <= 0;
             ex2_store_data    <= 0;
             ex2_pred_pc       <= 0;
+            div_started       <= 0;
         end
         else if (flush_ex1) begin
             ex2_valid         <= 0;      // bubble
             mul_start         <= 0;
             div_start         <= 0;
+            div_started       <= 0;
             ex2_branch_taken  <= 0;
             ex2_branch_target <= 0;
+        end
+        else if (div_start) begin
+            div_start         <= 0;      // Pulse for exactly 1 cycle
+            div_started       <= 1;
         end
         else if (div_busy) begin
             div_start         <= 0;      // Clear start pulse when divider becomes busy
@@ -146,8 +155,16 @@ module ex1 (
             ex2_branch_taken  <= ex1_valid_in && (branch_result | is_jump | is_jalr);
             ex2_branch_target <= calc_branch_target;
 
-            mul_start <= is_muldiv && !id_ctrl_bus[18]; // bit 18 of ctrl is funct3[2]
-            div_start <= is_muldiv &&  id_ctrl_bus[18];
+            mul_start <= ex1_valid_in && is_muldiv && !id_ctrl_bus[18]; // bit 18 of ctrl is funct3[2]
+            
+            if (ex1_valid_in && is_muldiv && id_ctrl_bus[18] && !div_started) begin
+                div_start   <= 1'b1;
+                div_started <= 1'b1;
+            end else begin
+                div_start   <= 1'b0;
+                div_started <= 1'b0;
+            end
+
             ex2_pred_pc <= ex1_pred_pc;
         end
     end

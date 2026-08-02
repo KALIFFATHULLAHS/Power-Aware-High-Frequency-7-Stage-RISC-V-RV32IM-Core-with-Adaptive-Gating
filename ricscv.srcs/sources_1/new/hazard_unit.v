@@ -16,6 +16,11 @@ module hazard_unit (
     input  wire [4:0]  ex2_rd,
     input  wire        ex2_mem_read,
 
+    // MEM stage
+    input  wire        mem_valid,
+    input  wire [4:0]  mem_rd,
+    input  wire        mem_mem_read,
+
     // Structural stalls
     input  wire        mul_busy,
     input  wire        div_busy,
@@ -46,7 +51,12 @@ module hazard_unit (
         (ex2_rd != 0) &&
         (ex2_rd == id_rs1 || ex2_rd == id_rs2);
 
-    wire load_use_hazard = hazard_load_ex1 | hazard_load_ex2;
+    wire hazard_load_mem =
+        mem_valid && mem_mem_read &&
+        (mem_rd != 0) &&
+        (mem_rd == id_rs1 || mem_rd == id_rs2);
+
+    wire load_use_hazard = hazard_load_ex1 | hazard_load_ex2 | hazard_load_mem;
 
     //===============================================
     // 2. MULTI-CYCLE MUL/DIV STRUCTURAL HAZARDS

@@ -27,8 +27,21 @@ def sw(rs2, offset_12bit, rs1):
     val = (imm_top << 25) | ((rs2 & 0x1F) << 20) | ((rs1 & 0x1F) << 15) | (2 << 12) | (imm_bot << 7) | 0x23
     return [(val >> (8 * i)) & 0xFF for i in range(4)]
 
+def lw(rd, offset_12bit, rs1):
+    val = ((offset_12bit & 0xFFF) << 20) | ((rs1 & 0x1F) << 15) | (2 << 12) | ((rd & 0x1F) << 7) | 0x03
+    return [(val >> (8 * i)) & 0xFF for i in range(4)]
+
 def r_type(rd, rs1, rs2, funct3, funct7):
     val = ((funct7 & 0x7F) << 25) | ((rs2 & 0x1F) << 20) | ((rs1 & 0x1F) << 15) | ((funct3 & 0x7) << 12) | ((rd & 0x1F) << 7) | 0x33
+    return [(val >> (8 * i)) & 0xFF for i in range(4)]
+
+def bne(rs1, rs2, offset_13bit):
+    off = offset_13bit & 0x1FFF
+    imm_12  = (off >> 12) & 0x1
+    imm_10_5= (off >> 5)  & 0x3F
+    imm_4_1 = (off >> 1)  & 0xF
+    imm_11  = (off >> 11) & 0x1
+    val = (imm_12 << 31) | (imm_10_5 << 25) | ((rs2 & 0x1F) << 20) | ((rs1 & 0x1F) << 15) | (1 << 12) | (imm_4_1 << 8) | (imm_11 << 7) | 0x63
     return [(val >> (8 * i)) & 0xFF for i in range(4)]
 
 def jal(rd, offset_21bit):
@@ -44,8 +57,6 @@ def jalr(rd, rs1, offset_12bit):
     val = ((offset_12bit & 0xFFF) << 20) | ((rs1 & 0x1F) << 15) | (0 << 12) | ((rd & 0x1F) << 7) | 0x67
     return [(val >> (8 * i)) & 0xFF for i in range(4)]
 
-WFI_BYTES = [0x73, 0x00, 0x50, 0x10]
-
 def make_program(inst_list):
     prog = bytearray()
     for inst in inst_list:
@@ -54,47 +65,44 @@ def make_program(inst_list):
     return prog
 
 # =====================================================================
-# ARTIX-7 DSP48E1 HARDWARE MULTIPLIER STRESS TEST
-# Workload:
-#   1. DSP48 Multiplication: 12 * 7 = 84
-#   2. Accumulation: 84 * 2 = 168
-#   3. Scaling: 168 / 4 = 42
-#   4. Subroutine Call: 42 + 8 = 50 (Hex 0x32, Binary 0b00110010)
-# Expected Output: Decimal 50 (Hex 0x32, Binary 0b00110010)
+# REAL PROCESSOR COMPLEX STRESS TEST SUITE
+# Expected Output: Decimal 88 (Hex 0x58, Binary 0b01011000)
 # =====================================================================
 
-master_prog = make_program([
+stress_prog = make_program([
     lui(10, 0xFFFF0),                        # 0x00: x10 = MMIO Base (0xFFFF0000)
-    addi(1, 0, 12),                          # 0x04: x1 = 12
-    addi(2, 0, 7),                           # 0x08: x2 = 7
-    r_type(3, 1, 2, funct3=0, funct7=0x01),  # 0x0C: MUL x3 = 12 * 7 = 84 (DSP48 Slice)
-    addi(4, 0, 2),                           # 0x10: x4 = 2
-    r_type(3, 3, 4, funct3=0, funct7=0x01),  # 0x14: MUL x3 = 84 * 2 = 168 (DSP48 Slice)
-    addi(5, 0, 4),                           # 0x18: x5 = 4
-    r_type(6, 3, 5, funct3=4, funct7=0x01),  # 0x1C: DIV x6 = 168 / 4 = 42
-    jal(1, 16),                              # 0x20: JAL x1 -> Subroutine at 0x30 (+16 bytes)
-    # Return Target (0x24):
-    sw(6, 0, 10),                            # 0x24: Output 50 to UART TX (0xFFFF0000)
-    sw(6, 4, 10),                            # 0x28: Output 50 to Board LEDs (0xFFFF0004)
-    WFI_BYTES,                               # 0x2C: WFI Halt
-    # Subroutine (0x30):
-    addi(6, 6, 8),                           # 0x30: x6 = 42 + 8 = 50 (Hex 0x32)
-    jalr(0, 1, 0)                            # 0x34: JALR -> Return to 0x24
+    lui(11, 0x00001),                        # 0x04: x11 = Data RAM Base (0x00001000)
+    addi(1, 0, 12),                          # 0x08: x1 = 12
+    addi(2, 0, 5),                           # 0x0C: x2 = 5
+    sw(1, 0, 11),                            # 0x10: RAM[0x1000] = 12 (Store Word)
+    sw(2, 4, 11),                            # 0x14: RAM[0x1004] = 5  (Store Word)
+    lw(3, 0, 11),                            # 0x18: x3 = RAM[0x1000] = 12 (Load-to-Use hazard test)
+    lw(4, 4, 11),                            # 0x1C: x4 = RAM[0x1004] = 5
+    addi(12, 0, 8),                          # 0x20: x12 = Loop Count = 8
+    addi(5, 0, 0),                           # 0x24: x5 = Accumulator = 0
+    # --- LOOP START (0x28) ---
+    r_type(6, 3, 4, funct3=0, funct7=0x01),  # 0x28: x6 = MUL x3 * x4
+    add(5, 5, 6),                            # 0x2C: x5 = Accumulator + x6
+    addi(3, 3, 1),                           # 0x30: x3++
+    addi(12, 12, -1),                        # 0x34: Loop Count--
+    bne(12, 0, -16),                         # 0x38: BNE x12 != 0 -> Jump to 0x28
+    # --- LOOP END --- Accumulator x5 = 620
+    jal(1, 16),                              # 0x3C: JAL x1 -> Subroutine at 0x4C (+16 bytes)
+    # --- RETURN TARGET (0x40) ---
+    sw(5, 0, 10),                            # 0x40: Output x5 to UART TX (0xFFFF0000)
+    sw(5, 4, 10),                            # 0x44: Output x5 to Board LEDs (0xFFFF0004)
+    jal(0, 0),                               # 0x48: Halt loop
+    # --- SUBROUTINE (0x4C) ---
+    sw(1, 0, 11),                            # 0x4C: Save RA (x1) to RAM stack [0x1000]
+    addi(7, 0, 7),                           # 0x50: x7 = 7
+    r_type(5, 5, 7, funct3=4, funct7=0x01),  # 0x54: DIV x5 = 620 / 7 = 88 (0x58)
+    lw(1, 0, 11),                            # 0x58: Restore RA (x1) from RAM stack [0x1000]
+    jalr(0, 1, 0)                            # 0x5C: JALR -> Return to 0x40
 ])
 
 def main():
     port = sys.argv[1] if len(sys.argv) > 1 else COM_PORT
-    print("=========================================================")
-    print("  ARTIX-7 DSP48E1 HARDWARE MULTIPLIER TEST SUITE        ")
-    print("=========================================================")
-    print("Tests Hardware Multiplication on DSP48 Slices:")
-    print("  1. DSP48 MUL: 12 * 7 = 84")
-    print("  2. DSP48 MUL: 84 * 2 = 168")
-    print("  3. 33-Cycle DIV: 168 / 4 = 42")
-    print("  4. Subroutine JAL & JALR: 42 + 8 = 50")
-    print("Expected Output: Decimal 50 (Hex 0x32, Binary 0b00110010)")
-    print("=========================================================")
-
+    print("==================================================")
     print("1. Please HOLD DOWN the reset button (Center Button) on your FPGA.")
     input("   Press Enter in this terminal when you are holding it down...")
 
@@ -110,14 +118,14 @@ def main():
         ser.reset_input_buffer()
         ser.reset_output_buffer()
 
-        print(f"Uploading DSP48 Multiplier Program ({len(master_prog)} bytes)...")
-        ser.write(master_prog)
+        print(f"Uploading program ({len(stress_prog)} bytes)...")
+        ser.write(stress_prog)
         ser.flush()
         time.sleep(0.1)
         print("Upload complete!")
         print("--------------------------------------------------")
         print("2. Please RELEASE the reset button now.")
-        print("   Waiting for Multiplier Output from FPGA...")
+        print("   Waiting for outputs from the FPGA...")
 
         received = ser.read(1)
         print("--------------------------------------------------")
@@ -125,17 +133,12 @@ def main():
             val = received[0]
             print(f"SUCCESS! Output received from FPGA (Hex): 0x{val:02X}")
             print(f"Equivalent Decimal value: {val}")
-            if val == 50 or val == 0x32:
-                print("\n🌟 ARTIX-7 DSP48E1 HARDWARE MULTIPLIER TEST PASSED 🌟")
+            if val == 88 or val == 0x58:
+                print("\n🌟 PROCESSOR COMPLEX STRESS TEST PASSED 🌟")
             else:
-                print(f"Result Received: {val} (Expected: 50 / 0x32)")
+                print(f"Result Received: {val} (Expected: 88 / 0x58)")
         else:
-            print("TIMEOUT: Serial RX timeout.")
-
-        print("\n--------------------------------------------------")
-        print("HARDWARE BOARD LED VERIFICATION (Address 0xFFFF0004):")
-        print("Expected Result: 50 (Hex 0x32 / Binary 0b00110010)")
-        print("Check your board: LEDs 5, 4, and 1 MUST BE ON!")
+            print("TIMEOUT: No output received from FPGA.")
         print("==================================================")
     finally:
         ser.close()

@@ -14,7 +14,7 @@ module mul_unit (
 
     assign busy = 1'b0;
     
-    // Signed extensions
+    // Signed and unsigned 32x32 DSP products (Combinational EX2 stage execution)
     wire [63:0] product_ss = $signed(op_a) * $signed(op_b);
     wire [63:0] product_su = $signed(op_a) * $signed({1'b0, op_b});
     wire [63:0] product_uu = op_a * op_b;
@@ -25,7 +25,7 @@ module mul_unit (
             3'b001: result = product_ss[63:32];  // MULH
             3'b010: result = product_su[63:32];  // MULHSU
             3'b011: result = product_uu[63:32];  // MULHU
-            default: result = 0;
+            default: result = 32'd0;
         endcase
     end
 

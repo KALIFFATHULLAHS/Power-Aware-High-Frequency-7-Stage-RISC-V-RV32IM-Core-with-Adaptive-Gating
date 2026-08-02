@@ -43,7 +43,7 @@ module branch_predictor (
     // UPDATE ON RESOLUTION & RESET
     //---------------------------------------------------------
     integer i;
-    always @(posedge clk or posedge reset) begin
+    always @(posedge clk) begin
         if (reset) begin
             for (i = 0; i < 64; i = i + 1) begin
                 bht[i] <= 2'b01; // Weakly Not Taken
