@@ -61,10 +61,16 @@ graph TD
 
 The project code is organized as follows:
 
-```
 ├── README.md                           # Project Documentation
+├── build_and_program.tcl               # Vivado Batch Build & Program TCL Script
+├── program_fpga.tcl                    # Hardware Manager FPGA Programming Script
 ├── ricscv.xpr                          # Vivado Project File
 ├── tb_riscv_core_behav.wcfg            # Testbench Waveform Configuration
+├── scripts/
+│   ├── upload_master_suite.py          # Grand Master Integration Test Program (ALU, MUL, DIV, REM, Loops, Subroutines)
+│   ├── upload_edge_cases.py            # Edge Case Suite (Div-by-zero, REMU, MUL-DIV pipeline chain, Fib)
+│   ├── upload_test_advanced.py         # Advanced Instruction Set Verification Suite
+│   └── upload_div_new.py               # Standard Division Verification Script
 └── ricscv.srcs/
     ├── constrs_1/new/
     │   └── risc_v.xdc                  # FPGA Constraints File (Pin Assignments)
@@ -79,7 +85,7 @@ The project code is organized as follows:
         ├── csr_unit.v                  # Cycle, Instret & Custom Power/Approx CSRs
         ├── hazard_unit.v               # Hazard control (stalls, flushes, misprediction recovery)
         ├── forwarding_unit.v           # Forwarding paths to bypass data to EX1/EX2
-        ├── branch_predictor.v          # Simple Hardware BPU
+        ├── branch_predictor.v          # Hardware BPU (BHT + BTB)
         ├── if1.v                       # Pipeline Fetch 1 Stage
         ├── if2.v                       # Pipeline Fetch 2 Stage
         ├── id.v                        # Pipeline Decode Stage
@@ -88,7 +94,7 @@ The project code is organized as follows:
         ├── mem.v                       # Pipeline Memory Access Stage
         ├── wb.v                        # Pipeline Writeback Stage
         ├── mul_unit.v                  # DSP-Optimized hardware multiplier
-        ├── div_unit.v                  # Iterative serial hardware divider
+        ├── div_unit.v                  # Iterative 32-cycle restoring hardware divider
         ├── uart_rx.v                   # UART Receiver module (loader & debug)
         ├── uart_tx_minimal.v           # MMIO UART Transmitter
         ├── uart_rx_minimal.v           # Minimal UART Receiver
@@ -98,51 +104,39 @@ The project code is organized as follows:
 
 ---
 
-## 🔌 Memory Mapping & I/O Address Space
+## 🧪 Hardware Testing & UART Binary Upload
 
-The core supports standardized memory-mapped input/output (MMIO) regions:
+Application binaries can be uploaded directly over the UART serial interface (`115200 Baud`) onto the physical FPGA board without re-synthesizing:
 
-| Address | Peripheral / Device | Access | Size | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| `0x0000_0000` - `0x0000_3FFF` | Instruction Memory (BRAM) | R (CPU) / W (UART) | 16 KB | Dual-port RAM loaded at boot via UART interface. |
-| `0x0000_0000` - `0x0000_3FFF` | Data Memory (BRAM) | R/W | 16 KB | BRAM workspace for application stack and heap. |
-| `0xFFFF_0000` | UART TX Register | W | 8 bits | Write a character to this address to stream it over TX. |
-| `0xFFFF_0004` | LED GPIO Port | W | 8 bits | Write data here to control the board's 8 physical debug LEDs. |
+### 1. Grand Master Integration Test
+Runs ALU addition, hardware multiplication, hardware division, hardware remainder, nested loops, and subroutine function calls in a single program:
+```powershell
+python scripts/upload_master_suite.py
+```
+- **Instructions**: Hold physical Center Reset button `M14` → Press `ENTER` → Release `M14` after upload completes.
+- **Expected Result**: Output `0x47` / Decimal `71` (`0x49` / Decimal `73` depending on remainder sampling).
 
----
-
-## ⚡ Custom CSR Registers & Low-Power Management
-
-To control the adaptive gating and approximate features, two custom Control & Status Registers (CSRs) are implemented:
-
-### 1. `mapprox` (CSR Address: `0x800`)
-Enables or disables approximate arithmetic operations to save power at the cost of precision.
-*   **`mapprox[0]`**: If set to `1`, approximate ALU mode is enabled.
-*   **Mechanism**: The ALU truncates the 4 LSBs of the operands during additions (`{ (op_a[31:4] + op_b[31:4]), 4'b0000 }`), avoiding toggle activity on the lower bits and saving adder energy.
-
-### 2. `mpower` (CSR Address: `0x801`)
-Specifies which pipeline stages and modules are active by masking their clocks. Defaults to `0xFF` (all stages enabled).
-*   **`mpower[0]`**: Enable Clock for IF1 Stage
-*   **`mpower[1]`**: Enable Clock for IF2 Stage
-*   **`mpower[2]`**: Enable Clock for ID Stage
-*   **`mpower[3]`**: Enable Clock for EX1 Stage
-*   **`mpower[4]`**: Enable Clock for EX2 Stage
-*   **`mpower[5]`**: Enable Clock for MEM Stage
-*   **`mpower[6]`**: Enable Clock for WB Stage
-*   **`mpower[7]`**: Enable UART interface clocking
+### 2. Edge Case Stress Test Suite
+Tests division-by-zero, `REMU` remainder, `MUL`+`DIV` pipeline chaining, and Fibonacci recursion:
+```powershell
+python scripts/upload_edge_cases.py
+```
 
 ---
 
 ## 🛠️ Simulation & Synthesis
 
 ### Simulation (Behavioral)
-1.  Open the project `ricscv.xpr` in Xilinx Vivado.
-2.  Set `riscv_core_tb.v` as the top simulation module.
-3.  Ensure your desired binary code (in hexadecimal format) is written to `program.mem` in the project root directory.
-4.  Run the behavioral simulation. The testbench handles automatic clock generation, bootloader reset release, and monitors MMIO UART outputs (`uart_tx`).
+1. Open the project `ricscv.xpr` in Xilinx Vivado.
+2. Set `riscv_core_tb.v` as the top simulation module.
+3. Ensure your desired binary code (in hexadecimal format) is written to `program.mem` in the project root directory.
+4. Run the behavioral simulation. The testbench handles automatic clock generation, bootloader reset release, and monitors MMIO UART outputs (`uart_tx`).
 
-### FPGA Synthesis
-The project is optimized for Xilinx 7-Series (e.g., Artix-7, Basys 3, Nexys A7) FPGA architectures.
-1.  Choose your target FPGA part number in Vivado settings.
-2.  Run **Synthesis & Implementation**.
-3.  Check the resource utilization report to inspect how Vivado infers `BUFGCE` primitives for clock gating and dedicated DSP slices for the multiplier (`mul_unit.v`).
+### FPGA Synthesis & Automated Build Script
+The project is optimized for Xilinx 7-Series (Artix-7 XC7A100T-2FTG256C) FPGA architectures.
+1. Run automated build script in Vivado batch mode:
+   ```powershell
+   vivado -mode batch -source build_and_program.tcl
+   ```
+2. Check resource utilization and timing reports (`fpga_top_utilization_routed.rpt`, `fpga_top_timing_summary_routed.rpt`) to verify high-frequency synthesis metrics and dynamic power savings.
+
