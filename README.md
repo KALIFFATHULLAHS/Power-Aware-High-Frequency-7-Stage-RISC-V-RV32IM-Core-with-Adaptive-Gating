@@ -61,6 +61,7 @@ graph TD
 
 The project code is organized as follows:
 
+```text
 ├── README.md                           # Project Documentation
 ├── build_and_program.tcl               # Vivado Batch Build & Program TCL Script
 ├── program_fpga.tcl                    # Hardware Manager FPGA Programming Script
