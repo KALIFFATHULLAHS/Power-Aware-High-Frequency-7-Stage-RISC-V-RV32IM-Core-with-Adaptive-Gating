@@ -1,5 +1,3 @@
-`timescale 1ns/1ps
-
 module stage_gating_controller (
     input  wire clk,
     input  wire reset,
@@ -43,9 +41,6 @@ module stage_gating_controller (
     output reg ce_csr
 );
 
-    // Suppress unused port warnings
-    wire _unused = &{1'b0, clk, reset, is_branch, is_load, is_store, flush_pipeline};
-
     always @(*) begin
         //----------------------------
         // DEFAULT: Use CSR pmode mask [6:0] for stages, [7] for UART
@@ -58,17 +53,30 @@ module stage_gating_controller (
         ce_mem = pmode[5];
         ce_wb  = pmode[6];
 
-        ce_mul    = pmode[4];
-        ce_div    = pmode[4];
+        ce_mul    = pmode[4] & (is_mul | mul_busy);
+        ce_div    = pmode[4] & (is_div | div_busy);
         ce_approx = pmode[4] & is_approx;
 
         ce_uart = pmode[7];
         ce_csr  = 1'b1; // Always alive for interrupt wake
 
         //----------------------------
-        // STALLS & FLUSHES are handled synchronously inside pipeline stage registers.
-        // Stage clock enables must remain active during stalls/flushes to allow clock edges to flush valid bits.
+        // STALLS (Pipeline registers hold values via !stall checks)
         //----------------------------
+        if (stall_if)
+            ce_if1 = 0;
+
+        if (stall_id)
+            ce_if2 = 0;
+
+        //----------------------------
+        // FLUSH
+        //----------------------------
+        if (flush_pipeline) begin
+            ce_id  = 0;
+            ce_ex1 = 0;
+            ce_ex2 = 0;
+        end
 
         //----------------------------
         // WFI MODE = FULL SHUTDOWN

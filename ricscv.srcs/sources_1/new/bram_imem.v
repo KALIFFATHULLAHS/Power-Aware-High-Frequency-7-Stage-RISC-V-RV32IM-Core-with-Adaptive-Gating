@@ -1,5 +1,3 @@
-`timescale 1ns/1ps
-
 module bram_imem(
     input  wire        clk,          // CPU clock
     input  wire [13:0] addr,
@@ -17,7 +15,7 @@ module bram_imem(
     integer i;
     initial begin
         for (i = 0; i < 4096; i = i + 1) begin
-            mem[i] = 32'h00000013; // Initialize memory to NOPs; UART bootloader overwrites dynamically
+            mem[i] = 32'h00000013; // Initialize entire memory to RISC-V NOPs (addi x0, x0, 0)
         end
         $display("[BRAM] Memory initialized with NOPs successfully.");
     end
@@ -36,41 +34,50 @@ module bram_imem(
     wire [7:0] rx_byte;
     wire       rx_valid;
 
-    uart_rx #(
-        .CLK_FREQ(50_000_000),
-        .BAUD_RATE(115200)
-    ) u_rx (
-        .clk(uart_clk),
-        .rx(uart_rx),
-        .data_valid(rx_valid),
-        .data_byte(rx_byte)
-    );
+  uart_rx #(
+    .CLK_FREQ(50_000_000),
+    .BAUD_RATE(115200)
+) u_rx (
+    .clk(uart_clk),
+    .rx(uart_rx),
+    .data_valid(rx_valid),
+    .data_byte(rx_byte)
+);
 
     reg [31:0] assemble_word = 0;
     reg [1:0]  byte_cnt      = 0;
     reg [11:0] load_addr     = 0;
+    reg        we_uart       = 0;
     assign uart_tx = 1'b1;
-
-    wire [31:0] next_assemble_word = {rx_byte, assemble_word[31:8]};
 
     reg prev_reset = 0;
 
     always @(posedge uart_clk) begin
-        if (reset) begin
-            if (rx_valid) begin
-                assemble_word <= next_assemble_word;
-                byte_cnt      <= byte_cnt + 1;
+        prev_reset <= reset;
+        we_uart <= 0;
 
-                if (byte_cnt == 2'd3) begin
-                    mem[load_addr] <= next_assemble_word; // Write complete 32-bit word directly into BRAM
-                    load_addr      <= load_addr + 1;
-                    byte_cnt       <= 0;
-                end
+        if (reset && !prev_reset) begin
+            byte_cnt <= 0;
+        end else if (rx_valid) begin
+            assemble_word <= {rx_byte, assemble_word[31:8]};
+            byte_cnt <= byte_cnt + 1;
+
+            if (byte_cnt == 2'd3) begin
+                we_uart <= 1;
+                byte_cnt <= 0;
             end
-        end else begin
-            byte_cnt      <= 0;
-            assemble_word <= 0;
-            load_addr     <= 0;
+        end
+    end
+
+    //--------------------------------------------------
+    // PORT B: UART WRITE PORT (clk_uart)
+    //--------------------------------------------------
+    always @(posedge uart_clk) begin
+        if (reset && !prev_reset) begin
+            load_addr <= 0;
+        end else if (we_uart) begin
+            mem[load_addr] <= assemble_word;
+            load_addr <= load_addr + 1;
         end
     end
 

@@ -46,41 +46,21 @@ module clock_manager (
     // Direct clock
     assign clk_sys = clk_in;
 
-    // Glitch-free simulation clock gating (negative latch ICG model)
-    reg ce_if1_latch, ce_if2_latch, ce_id_latch, ce_ex1_latch, ce_ex2_latch, ce_mem_latch, ce_wb_latch;
-    reg ce_mul_latch, ce_div_latch, ce_approx_latch, ce_uart_latch, ce_csr_latch;
+    // No gating → all stages always enabled
+    assign clk_if1    = clk_in & ce_if1;
+    assign clk_if2    = clk_in & ce_if2;
+    assign clk_id     = clk_in & ce_id;
+    assign clk_ex1    = clk_in & ce_ex1;
+    assign clk_ex2    = clk_in & ce_ex2;
+    assign clk_mem    = clk_in & ce_mem;
+    assign clk_wb     = clk_in & ce_wb;
 
-    always @(*) begin
-        if (!clk_in) begin
-            ce_if1_latch    = ce_if1;
-            ce_if2_latch    = ce_if2;
-            ce_id_latch     = ce_id;
-            ce_ex1_latch    = ce_ex1;
-            ce_ex2_latch    = ce_ex2;
-            ce_mem_latch    = ce_mem;
-            ce_wb_latch     = ce_wb;
-            ce_mul_latch    = ce_mul;
-            ce_div_latch    = ce_div;
-            ce_approx_latch = ce_approx;
-            ce_uart_latch   = ce_uart;
-            ce_csr_latch    = ce_csr;
-        end
-    end
+    assign clk_mul    = clk_in & ce_mul;
+    assign clk_div    = clk_in & ce_div;
+    assign clk_approx = clk_in & ce_approx;
 
-    assign clk_if1    = clk_in & ce_if1_latch;
-    assign clk_if2    = clk_in & ce_if2_latch;
-    assign clk_id     = clk_in & ce_id_latch;
-    assign clk_ex1    = clk_in & ce_ex1_latch;
-    assign clk_ex2    = clk_in & ce_ex2_latch;
-    assign clk_mem    = clk_in & ce_mem_latch;
-    assign clk_wb     = clk_in & ce_wb_latch;
-
-    assign clk_mul    = clk_in & ce_mul_latch;
-    assign clk_div    = clk_in & ce_div_latch;
-    assign clk_approx = clk_in & ce_approx_latch;
-
-    assign clk_uart   = clk_in & ce_uart_latch;
-    assign clk_csr    = clk_in & ce_csr_latch;
+    assign clk_uart   = clk_in & ce_uart;
+    assign clk_csr    = clk_in & ce_csr;
 
     // NO MMCM. NO BUFGCE. NO LOCKED.
     // This avoids X propagation.
@@ -94,10 +74,10 @@ module clock_manager (
     wire locked;
 
     MMCME2_BASE #(
-        .CLKIN1_PERIOD(20.0),     // 50 MHz input clock (20.0 ns period)
-        .CLKFBOUT_MULT_F(20.0),   // VCO = 50 MHz * 20 = 1000 MHz (valid range 600 - 1440 MHz)
+        .CLKIN1_PERIOD(20.0),
+        .CLKFBOUT_MULT_F(20.0),
         .DIVCLK_DIVIDE(1),
-        .CLKOUT0_DIVIDE_F(20.0)   // clk_sys = 1000 MHz / 20 = 50 MHz
+        .CLKOUT0_DIVIDE_F(20.0)
     ) mmcm_inst (
         .CLKIN1 (clk_in),
         .CLKFBIN(clk_fb),
