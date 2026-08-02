@@ -37,9 +37,9 @@ module ex1 (
     output reg [23:0]  ex2_ctrl_bus,
     output reg [31:0]  ex2_pred_pc,
 
-    // Branch resolution
-    output reg         branch_taken,
-    output reg [31:0]  branch_target,
+    // Branch resolution (EX2 stage pipeline outputs)
+    output reg         ex2_branch_taken,
+    output reg [31:0]  ex2_branch_target,
 
     // MUL/DIV requests
     output reg         mul_start,
@@ -106,22 +106,30 @@ module ex1 (
     //------------------------------------------------------------
     always @(posedge clk_ex1 or posedge reset) begin
         if (reset) begin
-            ex2_valid       <= 0;
-            mul_start       <= 0;
-            div_start       <= 0;
-            branch_taken    <= 0;
-            branch_target   <= 0;
-            ex2_store_data  <= 0;
-            ex2_pred_pc     <= 0;
+            ex2_valid         <= 0;
+            ex2_pc            <= 0;
+            ex2_op_a          <= 0;
+            ex2_op_b          <= 0;
+            ex2_imm           <= 0;
+            ex2_instr         <= 0;
+            ex2_rd            <= 0;
+            ex2_ctrl_bus      <= 0;
+            mul_start         <= 0;
+            div_start         <= 0;
+            ex2_branch_taken  <= 0;
+            ex2_branch_target <= 0;
+            ex2_store_data    <= 0;
+            ex2_pred_pc       <= 0;
         end
         else if (flush_ex1) begin
-            ex2_valid     <= 0;      // bubble
-            mul_start     <= 0;
-            div_start     <= 0;
-            branch_taken  <= 0;
+            ex2_valid         <= 0;      // bubble
+            mul_start         <= 0;
+            div_start         <= 0;
+            ex2_branch_taken  <= 0;
+            ex2_branch_target <= 0;
         end
         else if (div_busy) begin
-            div_start     <= 0;      // Clear start pulse when divider becomes busy
+            div_start         <= 0;      // Clear start pulse when divider becomes busy
         end
         else if (!stall_ex1) begin
             ex2_valid    <= ex1_valid_in;
@@ -135,14 +143,13 @@ module ex1 (
 
             ex2_store_data <= store_data;
 
-            branch_taken  <= branch_result | is_jump | is_jalr;
-            branch_target <= calc_branch_target;
+            ex2_branch_taken  <= ex1_valid_in && (branch_result | is_jump | is_jalr);
+            ex2_branch_target <= calc_branch_target;
 
             mul_start <= is_muldiv && !id_ctrl_bus[18]; // bit 18 of ctrl is funct3[2]
             div_start <= is_muldiv &&  id_ctrl_bus[18];
             ex2_pred_pc <= ex1_pred_pc;
         end
     end
-
 
 endmodule

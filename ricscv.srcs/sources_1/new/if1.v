@@ -36,11 +36,13 @@ module if1 (
     wire [31:0] pc_next;
 
     assign pc_next =
-        branch_mispredict    ? branch_recovery_pc :
-        predicted_valid       ? predicted_pc       :
-                                pc_reg + 32'd4;
+        branch_mispredict    ? (branch_recovery_pc + 32'd4) :
+        predicted_valid       ? (predicted_pc + 32'd4)       :
+                                (pc_reg + 32'd4);
 
-    assign if1_pred_pc = pc_next;
+    assign if1_pred_pc = branch_mispredict ? branch_recovery_pc :
+                         predicted_valid   ? predicted_pc       :
+                                             pc_next;
 
     //---------------------------------------------------------
     // PC REGISTER UPDATE (clock-gated domain)
@@ -51,20 +53,23 @@ module if1 (
             pc_out    <= 32'h00000000;
             if1_valid <= 1'b0;
         end else if (flush_if) begin
-            pc_reg    <= pc_next;
-            pc_out    <= pc_next;
-            if1_valid <= 1'b1;  // Correct: next instruction is valid after flush
+            pc_out    <= branch_mispredict ? branch_recovery_pc : pc_reg;
+            pc_reg    <= branch_mispredict ? (branch_recovery_pc + 32'd4) : pc_next;
+            if1_valid <= 1'b1;
         end else if (!stall_if) begin
+            pc_out    <= predicted_valid ? predicted_pc : pc_reg;
             pc_reg    <= pc_next;
-            pc_out    <= pc_next;
             if1_valid <= 1'b1;
         end
         // If stalled, hold values
     end
 
     //---------------------------------------------------------
-    // Instruction Memory Address
+    // Instruction Memory Address (Combinational address for synchronous BRAM read latency)
     //---------------------------------------------------------
-    assign imem_addr = pc_reg;
+    assign imem_addr = reset                ? 32'h00000000 :
+                       branch_mispredict    ? branch_recovery_pc :
+                       predicted_valid       ? predicted_pc       :
+                                               pc_reg;
 
 endmodule

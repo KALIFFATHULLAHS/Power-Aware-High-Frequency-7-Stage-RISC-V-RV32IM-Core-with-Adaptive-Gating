@@ -1,3 +1,5 @@
+`timescale 1ns/1ps
+
 module div_unit (
     input  wire        clk,
     input  wire        reset,
@@ -70,4 +72,3 @@ module div_unit (
     end
 
 endmodule
-

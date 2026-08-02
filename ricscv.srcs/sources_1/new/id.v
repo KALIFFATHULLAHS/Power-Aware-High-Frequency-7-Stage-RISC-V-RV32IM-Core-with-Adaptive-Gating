@@ -61,7 +61,7 @@ module id (
             7'b0000011: imm = {{20{id_instr_in[31]}}, id_instr_in[31:20]}; // Load
             7'b0100011: imm = {{20{id_instr_in[31]}}, id_instr_in[31:25], id_instr_in[11:7]}; // S-type
             7'b1100011: imm = {{19{id_instr_in[31]}}, id_instr_in[31], id_instr_in[7], id_instr_in[30:25], id_instr_in[11:8], 1'b0}; // B-type
-            7'b1101111: imm = {{12{id_instr_in[31]}}, id_instr_in[19:12], id_instr_in[20], id_instr_in[30:21], 1'b0}; // J-type
+            7'b1101111: imm = {{11{id_instr_in[31]}}, id_instr_in[31], id_instr_in[19:12], id_instr_in[20], id_instr_in[30:21], 1'b0}; // J-type JAL
             7'b1100111: imm = {{20{id_instr_in[31]}}, id_instr_in[31:20]}; // JALR
             7'b0110111: imm = {id_instr_in[31:12], 12'b0}; // U-type LUI
             7'b0010111: imm = {id_instr_in[31:12], 12'b0}; // U-type AUIPC
