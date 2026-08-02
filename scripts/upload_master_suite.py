@@ -112,39 +112,42 @@ def main():
     print("==================================================")
     print(f"Target Master Operation : Grand Integration Pipeline")
     print(f"--------------------------------------------------")
-    print(f"1. Please HOLD DOWN the reset button (Center Button) on your FPGA.")
-    input("   Press Enter in this terminal when you are holding it down...")
-
     print(f"Connecting to {port} at {BAUD_RATE}...")
     try:
         ser = serial.Serial(port, BAUD_RATE, timeout=10.0)
-        ser.reset_input_buffer()
-        ser.reset_output_buffer()
     except Exception as e:
         print(f"Error opening port {port}: {e}")
         print("Make sure to CLOSE the VS Code Serial Monitor before running!")
         return
 
-    print(f"Uploading Master Program ({len(master_prog)} bytes)...")
-    ser.write(master_prog)
-    ser.flush()
-    print("Upload complete!")
-    print(f"--------------------------------------------------")
-    print("2. Please RELEASE the reset button now.")
-    print("   Waiting for Master Checksum output from FPGA...")
+    try:
+        ser.reset_input_buffer()
+        ser.reset_output_buffer()
 
-    received = ser.read(1)
-    ser.close()
+        print(f"STEP 1: PRESS and HOLD the Center Reset button (M14) on your FPGA NOW.")
+        input("        Keep holding it down and press ENTER here...")
 
-    print(f"--------------------------------------------------")
-    if received:
-        val = received[0]
-        print(f"SUCCESS! Output received from FPGA (Hex): {val:02X}")
-        print(f"Equivalent Decimal value: {val}")
-        print("\n🌟 ALL PROCESSOR MODULES PASSED THE GRAND INTEGRATION TEST 🌟")
-    else:
-        print("TIMEOUT: No output received from FPGA.")
-    print("==================================================")
+        print(f"Uploading Master Program ({len(master_prog)} bytes)... Please keep holding Reset...")
+        ser.write(master_prog)
+        ser.flush()
+        time.sleep(0.1)
+        print("Upload complete!")
+        print(f"--------------------------------------------------")
+        print("STEP 2: You can RELEASE the reset button now.")
+        print("        Waiting for Master Checksum output from FPGA...")
+
+        received = ser.read(1)
+        print(f"--------------------------------------------------")
+        if received:
+            val = received[0]
+            print(f"SUCCESS! Output received from FPGA (Hex): {val:02X}")
+            print(f"Equivalent Decimal value: {val}")
+            print("\n🌟 ALL PROCESSOR MODULES PASSED THE GRAND INTEGRATION TEST 🌟")
+        else:
+            print("TIMEOUT: No output received from FPGA within 10 seconds.")
+        print("==================================================")
+    finally:
+        ser.close()
 
 if __name__ == "__main__":
     main()
