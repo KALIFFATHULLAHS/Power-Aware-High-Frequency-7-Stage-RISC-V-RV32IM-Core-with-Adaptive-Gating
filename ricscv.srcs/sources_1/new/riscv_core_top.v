@@ -51,6 +51,13 @@ clock_manager clk_mgr (
 // PIPELINE WIRES DECLARATION
 //=============================================================
 
+//---------- PREDICTED PC & BRANCH TARGET WIRES ----------
+wire [31:0] id_pred_pc;
+wire [31:0] ex1_pred_pc;
+wire [31:0] ex2_pred_pc;
+wire        ex2_branch_taken;
+wire [31:0] ex2_branch_target;
+
 //---------- HAZARD / STALL / FLUSH ----------
 wire stall_if, stall_id, stall_ex1, stall_ex2;
 wire flush_id, flush_ex1;
@@ -121,7 +128,7 @@ wire [31:0] wb_instr;
 //=============================================================
 // You may use Xilinx BRAM IP or handwritten BRAM module.
 
-wire [31:0] imem_addr = if1_pc;
+wire [31:0] imem_addr;
 
 bram_imem imem (
     .clk(clk_if1),
@@ -210,34 +217,30 @@ bram_dmem dmem (
 //=============================================================
 // PIPELINE PREDICTED PC PROPAGATION
 //=============================================================
-wire        branch_taken_ex1;
-wire [31:0] branch_target_ex1;
-
-wire [31:0] id_pred_pc;
-wire [31:0] ex1_pred_pc;
-wire [31:0] ex2_pred_pc;
-
-wire [31:0] branch_recovery_pc = branch_taken_ex1 ? branch_target_ex1 : (ex2_pc + 4);
-wire        branch_mispredict = ex2_valid && (branch_recovery_pc != ex2_pred_pc);
+wire [31:0] branch_recovery_pc = ex2_branch_taken ? ex2_branch_target : (ex2_pc + 32'd4);
+wire ex2_is_control_flow   = ex2_valid && (ex2_ctrl_bus[12] || ex2_ctrl_bus[11] || ex2_ctrl_bus[10]);
+wire branch_mispredict     = ex2_is_control_flow && (branch_recovery_pc != ex2_pred_pc);
 
 //=============================================================
 // BRANCH PREDICTOR
 //=============================================================
-
-wire [31:0] predicted_pc;
+wire [31:0] bpu_predicted_pc;
 wire        predicted_valid;
 
+wire ex2_is_branch_instr = ex2_valid && (ex2_ctrl_bus[12] || ex2_ctrl_bus[11] || ex2_ctrl_bus[10]);
+
 branch_predictor bpu (
-    .clk(clk_if1),
+    .clk(clk_sys),
     .reset(reset),
 
     .if_pc(if1_pc),
-    .predicted_pc(predicted_pc),
+    .predicted_pc(bpu_predicted_pc),
     .predicted_valid(predicted_valid),
 
-    .branch_taken(branch_taken_ex1),
-    .branch_pc      (ex2_pc), 
-    .branch_target(branch_target_ex1)
+    .is_branch_instr(ex2_is_branch_instr),
+    .branch_taken(ex2_branch_taken),
+    .branch_pc   (ex2_pc), 
+    .branch_target(ex2_branch_target)
 );
 
 //=============================================================
@@ -256,13 +259,13 @@ if1 if1_stage (
     .branch_mispredict(branch_mispredict),
     .branch_recovery_pc(branch_recovery_pc),
 
-    .predicted_pc(predicted_pc),
+    .predicted_pc(bpu_predicted_pc),
     .predicted_valid(predicted_valid),
 
     .pc_out(if1_pc),
     .if1_valid(if1_valid),
     .if1_pred_pc(if1_pred_pc),
-    .imem_addr()
+    .imem_addr(imem_addr)
 );
 
 //=============================================================
@@ -273,10 +276,10 @@ if2 if2_stage (
     .clk_if2(clk_if2),
     .reset(reset),
 
-    .if1_pc(if2_pc),
+    .if1_pc(if1_pc),
     .if1_instr(imem_rdata),
     .if1_valid(if1_valid),
-    .if1_pred_pc(if2_pred_pc),
+    .if1_pred_pc(if1_pred_pc),
 
     .stall_if2(stall_id),
     .flush_if2(flush_id),
@@ -360,17 +363,17 @@ forwarding_unit fwd_unit (
     .id_rs2(ex1_instr[24:20]),
 
     // EX2 stage forwarding
-    .ex2_valid(ex2_valid),
+    .ex2_valid(ex2_valid && ex2_ctrl_bus[15]),
     .ex2_rd(ex2_rd),
     .ex2_result(ex2_comb_result),
 
     // MEM stage forwarding
-    .mem_valid(mem_valid),
+    .mem_valid(mem_valid && mem_ctrl_bus[15]),
     .mem_rd(mem_rd),
     .mem_result(mem_result),
 
     // WB stage forwarding
-    .wb_valid(wb_valid),
+    .wb_valid(wb_valid && wb_ctrl_bus[15]),
     .wb_rd(wb_rd),
     .wb_result(wb_data),
 
@@ -491,8 +494,8 @@ ex1 ex1_stage (
     .ex2_pred_pc(ex2_pred_pc),
 
     // Branch resolution
-    .branch_taken(branch_taken_ex1),
-    .branch_target(branch_target_ex1),
+    .ex2_branch_taken(ex2_branch_taken),
+    .ex2_branch_target(ex2_branch_target),
 
     // MUL/DIV start
     .mul_start(mul_start_ex1),
@@ -545,29 +548,16 @@ mul_unit mul_u (
 
 
 //=============================================================
-// DIVIDER UNIT (Iterative)
+// DIVIDER UNIT (Iterative 32-Cycle Restoring Divider)
 //=============================================================
 
 wire [31:0] div_result;
 
-reg div_started;
-wire is_div_instr = ex2_valid && ex2_ctrl_bus[23] && ex2_ctrl_bus[18];
-always @(posedge clk_sys or posedge reset) begin
-    if (reset) begin
-        div_started <= 0;
-    end else if (is_div_instr && !div_started) begin
-        div_started <= 1;
-    end else if (!is_div_instr) begin
-        div_started <= 0;
-    end
-end
-wire div_start_pulse = is_div_instr && !div_started;
-
 div_unit div_u (
-    .clk(clk_sys),
+    .clk(clk_ex2),
     .reset(reset),
 
-    .start(div_start_pulse),
+    .start(div_start_ex1),
     .op_type(ex2_ctrl_bus[18:16]),
     .op_a(ex2_op_a),
     .op_b(ex2_op_b),
@@ -597,7 +587,7 @@ ex2 ex2_stage (
     .mem_instr(mem_instr),
 
     .mul_start(mul_start_ex1),
-    .div_start(div_start_pulse),
+    .div_start(div_start_ex1),
 
     .approx_enable(csr_approx_mode),
 
