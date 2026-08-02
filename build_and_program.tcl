@@ -2,6 +2,7 @@
 open_project {c:/Users/skali/ricscv/ricscv.xpr}
 
 # Reset both runs to ensure clean build
+set_property AUTO_INCREMENTAL_CHECKPOINT 0 [get_runs synth_1]
 reset_run synth_1
 reset_run impl_1
 

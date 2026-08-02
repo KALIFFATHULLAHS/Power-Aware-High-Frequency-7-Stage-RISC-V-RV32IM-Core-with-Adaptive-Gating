@@ -7,7 +7,11 @@ set device [lindex [get_hw_devices] 0]
 current_hw_device $device
 
 # Set the bitstream file
-set_property PROGRAM.FILE {c:/Users/skali/ricscv/ricscv.runs/impl_1/fpga_top.bit} $device
+if {[file exists {c:/Users/skali/ricscv/fpga_top.bit}]} {
+    set_property PROGRAM.FILE {c:/Users/skali/ricscv/fpga_top.bit} $device
+} else {
+    set_property PROGRAM.FILE {c:/Users/skali/ricscv/ricscv.runs/impl_1/fpga_top.bit} $device
+}
 
 # Program the device
 program_hw_devices $device

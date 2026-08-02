@@ -39,3 +39,12 @@ Thumbs.db
 .settings/
 .project
 .cproject
+
+# Python and simulation temporary files
+__pycache__/
+*.pyc
+xsim.dir/
+sim_proj.prj
+xvlog.pb
+xelab.pb
+
