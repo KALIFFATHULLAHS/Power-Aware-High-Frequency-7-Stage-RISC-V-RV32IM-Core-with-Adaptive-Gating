@@ -71,29 +71,34 @@ master_prog = make_program([
     addi(1, 0, 50),                          # 0x04: x1 = 50
     addi(2, 0, 25),                          # 0x08: x2 = 25
     add(3, 1, 2),                            # 0x0C: x3 = 50 + 25 = 75
-    addi(4, 0, 4),                           # 0x10: x4 = 4
-    r_type(4, 3, 4, funct3=0, funct7=0x01),  # 0x14: MUL x4 = 75 * 4 = 300
-    addi(2, 0, 7),                           # 0x18: x2 = 7
-    r_type(5, 4, 2, funct3=4, funct7=0x01),  # 0x1C: DIV x5 = 300 / 7 = 42
-    addi(0, 0, 0),                           # 0x20: NOP (Divider pipeline decoupling)
-    r_type(6, 4, 2, funct3=7, funct7=0x01),  # 0x24: REMU x6 = 300 % 7 = 4 (or 6)
-    addi(7, 0, 3),                           # 0x28: x7 = Outer Count = 3
-    # Outer Loop (0x2C):
-    addi(8, 0, 5),                           # 0x2C: x8 = Inner Count = 5
-    # Inner Loop (0x30):
-    addi(5, 5, 1),                           # 0x30: x5 = x5 + 1
-    addi(8, 8, -1),                          # 0x34: x8 = x8 - 1
-    bne(8, 0, -8),                           # 0x38: BNE x8, x0 -> loop to 0x30 (-8 bytes)
-    addi(7, 7, -1),                          # 0x3C: x7 = x7 - 1
-    bne(7, 0, -20),                          # 0x40: BNE x7, x0 -> loop to 0x2C (-20 bytes)
-    jal(1, 16),                              # 0x44: JAL x1 -> Subroutine at 0x54 (+16 bytes)
-    # Return Target (0x48):
-    add(8, 5, 6),                            # 0x48: x8 = x5 + x6
-    sw(8, 0, 10),                            # 0x4C: SW x8 to UART TX
-    WFI_BYTES,                               # 0x50: Halt CPU
-    # Subroutine (0x54):
-    addi(5, 5, 10),                          # 0x54: x5 = x5 + 10
-    jalr(0, 1, 0)                            # 0x58: JALR x0, 0(x1) -> Return to 0x48
+    sw(3, 0, 10),                            # 0x10: SW x3 (75 / 0x4B) -> Step 1
+    addi(4, 0, 4),                           # 0x14: x4 = 4
+    r_type(4, 3, 4, funct3=0, funct7=0x01),  # 0x18: MUL x4 = 75 * 4 = 300
+    sw(4, 0, 10),                            # 0x1C: SW x4 (300 & 0xFF = 44 / 0x2C) -> Step 2
+    addi(2, 0, 7),                           # 0x20: x2 = 7
+    r_type(5, 4, 2, funct3=4, funct7=0x01),  # 0x24: DIV x5 = 300 / 7 = 42
+    sw(5, 0, 10),                            # 0x28: SW x5 (42 / 0x2A) -> Step 3
+    addi(0, 0, 0),                           # 0x2C: NOP
+    r_type(6, 4, 2, funct3=7, funct7=0x01),  # 0x30: REMU x6 = 300 % 7 = 6
+    sw(6, 0, 10),                            # 0x34: SW x6 (6 / 0x06) -> Step 4
+    addi(7, 0, 3),                           # 0x38: x7 = Outer Count = 3
+    # Outer Loop (0x3C):
+    addi(8, 0, 5),                           # 0x3C: x8 = Inner Count = 5
+    # Inner Loop (0x40):
+    addi(5, 5, 1),                           # 0x40: x5 = x5 + 1
+    addi(8, 8, -1),                          # 0x44: x8 = x8 - 1
+    bne(8, 0, -8),                           # 0x48: BNE x8, x0 -> loop to 0x40 (-8 bytes)
+    addi(7, 7, -1),                          # 0x4C: x7 = x7 - 1
+    bne(7, 0, -20),                          # 0x50: BNE x7, x0 -> loop to 0x3C (-20 bytes)
+    sw(5, 0, 10),                            # 0x54: SW x5 (57 / 0x39) -> Step 5
+    jal(1, 16),                              # 0x58: JAL x1 -> Subroutine at 0x68 (+16 bytes)
+    # Return Target (0x5C):
+    add(8, 5, 6),                            # 0x5C: x8 = x5 + x6
+    sw(8, 0, 10),                            # 0x60: SW x8 (73 / 0x49) -> Final Result
+    WFI_BYTES,                               # 0x64: Halt CPU
+    # Subroutine (0x68):
+    addi(5, 5, 10),                          # 0x68: x5 = x5 + 10
+    jalr(0, 1, 0)                            # 0x6C: JALR x0, 0(x1) -> Return to 0x5C
 ])
 
 def main():
@@ -101,50 +106,57 @@ def main():
     print("==================================================")
     print("      GRAND MASTER INTEGRATION TEST SUITE        ")
     print("==================================================")
-    print("Tests IN SEQUENCE in a SINGLE workload:")
-    print("  1. Basic ALU Addition (50 + 25 = 75)")
-    print("  2. Hardware Multiplication (75 * 4 = 300)")
-    print("  3. Hardware Division (300 / 7 = 42)")
-    print("  4. Hardware Remainder (300 % 7)")
-    print("  5. Nested Loop Branch Prediction (3 x 5 = +15)")
-    print("  6. Function Call Subroutine (JAL & JALR = +10)")
-    print("  7. Checksum Verification")
-    print("==================================================")
-    print(f"Target Master Operation : Grand Integration Pipeline")
-    print(f"--------------------------------------------------")
-    print(f"1. Please HOLD DOWN the reset button (Center Button) on your FPGA.")
-    input("   Press Enter in this terminal when you are holding it down...")
-
     print(f"Connecting to {port} at {BAUD_RATE}...")
     try:
-        ser = serial.Serial(port, BAUD_RATE, timeout=10.0)
-        ser.reset_input_buffer()
-        ser.reset_output_buffer()
+        ser = serial.Serial(port, BAUD_RATE, timeout=5.0)
     except Exception as e:
         print(f"Error opening port {port}: {e}")
-        print("Make sure to CLOSE the VS Code Serial Monitor before running!")
         return
 
-    print(f"Uploading Master Program ({len(master_prog)} bytes)...")
-    ser.write(master_prog)
-    ser.flush()
-    print("Upload complete!")
-    print(f"--------------------------------------------------")
-    print("2. Please RELEASE the reset button now.")
-    print("   Waiting for Master Checksum output from FPGA...")
+    try:
+        ser.reset_input_buffer()
+        ser.reset_output_buffer()
 
-    received = ser.read(1)
-    ser.close()
+        print(f"STEP 1: PRESS and HOLD the Center Reset button (M14) on your FPGA NOW.")
+        input("        Keep holding it down and press ENTER here...")
 
-    print(f"--------------------------------------------------")
-    if received:
-        val = received[0]
-        print(f"SUCCESS! Output received from FPGA (Hex): {val:02X}")
-        print(f"Equivalent Decimal value: {val}")
-        print("\n🌟 ALL PROCESSOR MODULES PASSED THE GRAND INTEGRATION TEST 🌟")
-    else:
-        print("TIMEOUT: No output received from FPGA.")
-    print("==================================================")
+        print(f"Uploading program ({len(master_prog)} bytes)...")
+        ser.write(master_prog)
+        ser.flush()
+        time.sleep(0.1)
+        print("Upload complete!")
+        print(f"--------------------------------------------------")
+        print("STEP 2: You can RELEASE the reset button now.")
+        print("        Listening for step outputs from FPGA...\n")
+
+        step_names = [
+            "Step 1: ALU Addition (50 + 25 = 75 / 0x4B)",
+            "Step 2: Multiplication (75 * 4 = 300 & 0xFF = 44 / 0x2C)",
+            "Step 3: Division (300 / 7 = 42 / 0x2A)",
+            "Step 4: Remainder (300 % 7 = 6 / 0x06)",
+            "Step 5: Nested Loops (3 x 5 = 15 -> x5 = 57 / 0x39)",
+            "Step 6: Final Checksum (57 + 10 + 6 = 73 / 0x49)"
+        ]
+
+        success_count = 0
+        for name in step_names:
+            rx = ser.read(1)
+            if rx:
+                val = rx[0]
+                print(f"  [PASS] {name} => Received: 0x{val:02X} (Decimal {val})")
+                success_count += 1
+            else:
+                print(f"  [FAIL/TIMEOUT] {name} => No output received!")
+                break
+
+        print(f"--------------------------------------------------")
+        if success_count == len(step_names):
+            print("🌟 ALL PROCESSOR MODULES PASSED THE GRAND INTEGRATION TEST 🌟")
+        else:
+            print(f"Pipeline stopped at step {success_count + 1}.")
+        print("==================================================")
+    finally:
+        ser.close()
 
 if __name__ == "__main__":
     main()
