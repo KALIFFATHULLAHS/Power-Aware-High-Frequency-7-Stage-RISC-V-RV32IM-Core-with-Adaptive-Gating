@@ -48,7 +48,7 @@ module stage_gating_controller (
 
     always @(*) begin
         //----------------------------
-        // DEFAULT: Use CSR pmode mask [6:0] for stages, [7] for UART
+        // DEFAULT: Stage Clock Enables from CSR pmode mask [6:0]
         //----------------------------
         ce_if1 = pmode[0];
         ce_if2 = pmode[1];
@@ -58,17 +58,16 @@ module stage_gating_controller (
         ce_mem = pmode[5];
         ce_wb  = pmode[6];
 
-        ce_mul    = pmode[4];
-        ce_div    = pmode[4];
+        //----------------------------
+        // DYNAMIC FUNCTIONAL UNIT GATING (PSA-Gate Mechanism)
+        // Selective enablement based on instruction class and multi-cycle execution state
+        //----------------------------
+        ce_mul    = pmode[4] & (is_mul | mul_busy);
+        ce_div    = pmode[4] & (is_div | div_busy);
         ce_approx = pmode[4] & is_approx;
 
         ce_uart = pmode[7];
         ce_csr  = 1'b1; // Always alive for interrupt wake
-
-        //----------------------------
-        // STALLS & FLUSHES are handled synchronously inside pipeline stage registers.
-        // Stage clock enables must remain active during stalls/flushes to allow clock edges to flush valid bits.
-        //----------------------------
 
         //----------------------------
         // WFI MODE = FULL SHUTDOWN
@@ -81,8 +80,9 @@ module stage_gating_controller (
             ce_ex2 = 0;
             ce_mem = 0;
             ce_wb  = 0;
+            ce_mul = 0;
+            ce_div = 0;
+            ce_approx = 0;
         end
     end
-
 endmodule
-

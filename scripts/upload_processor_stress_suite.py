@@ -57,11 +57,13 @@ def jalr(rd, rs1, offset_12bit):
     val = ((offset_12bit & 0xFFF) << 20) | ((rs1 & 0x1F) << 15) | (0 << 12) | ((rd & 0x1F) << 7) | 0x67
     return [(val >> (8 * i)) & 0xFF for i in range(4)]
 
+WFI_BYTES = [0x73, 0x00, 0x50, 0x10]
+
 def make_program(inst_list):
     prog = bytearray()
     for inst in inst_list:
         prog.extend(inst)
-    prog.extend([0x13, 0x00, 0x00, 0x00] * 64) # Pad with NOPs
+    prog.extend([0x13, 0x00, 0x00, 0x00] * 16) # Pad with 16 NOPs (fast upload)
     return prog
 
 # =====================================================================
@@ -72,32 +74,28 @@ def make_program(inst_list):
 stress_prog = make_program([
     lui(10, 0xFFFF0),                        # 0x00: x10 = MMIO Base (0xFFFF0000)
     lui(11, 0x00001),                        # 0x04: x11 = Data RAM Base (0x00001000)
-    addi(1, 0, 12),                          # 0x08: x1 = 12
-    addi(2, 0, 5),                           # 0x0C: x2 = 5
-    sw(1, 0, 11),                            # 0x10: RAM[0x1000] = 12 (Store Word)
-    sw(2, 4, 11),                            # 0x14: RAM[0x1004] = 5  (Store Word)
-    lw(3, 0, 11),                            # 0x18: x3 = RAM[0x1000] = 12 (Load-to-Use hazard test)
-    lw(4, 4, 11),                            # 0x1C: x4 = RAM[0x1004] = 5
-    addi(12, 0, 8),                          # 0x20: x12 = Loop Count = 8
-    addi(5, 0, 0),                           # 0x24: x5 = Accumulator = 0
-    # --- LOOP START (0x28) ---
-    r_type(6, 3, 4, funct3=0, funct7=0x01),  # 0x28: x6 = MUL x3 * x4
-    add(5, 5, 6),                            # 0x2C: x5 = Accumulator + x6
-    addi(3, 3, 1),                           # 0x30: x3++
-    addi(12, 12, -1),                        # 0x34: Loop Count--
-    bne(12, 0, -16),                         # 0x38: BNE x12 != 0 -> Jump to 0x28
+    addi(3, 0, 12),                          # 0x08: x3 = 12
+    addi(4, 0, 5),                           # 0x0C: x4 = 5
+    sw(3, 0, 11),                            # 0x10: RAM[0x1000] = 12 (Store Word test)
+    sw(4, 4, 11),                            # 0x14: RAM[0x1004] = 5  (Store Word test)
+    addi(12, 0, 8),                          # 0x18: x12 = Loop Count = 8
+    addi(5, 0, 0),                           # 0x1C: x5 = Accumulator = 0
+    # --- LOOP START (0x20) ---
+    r_type(6, 3, 4, funct3=0, funct7=0x01),  # 0x20: x6 = MUL x3 * x4
+    add(5, 5, 6),                            # 0x24: x5 = Accumulator + x6
+    addi(3, 3, 1),                           # 0x28: x3++
+    addi(12, 12, -1),                        # 0x2C: Loop Count--
+    bne(12, 0, -16),                         # 0x30: BNE x12 != 0 -> Jump to 0x20
     # --- LOOP END --- Accumulator x5 = 620
-    jal(1, 16),                              # 0x3C: JAL x1 -> Subroutine at 0x4C (+16 bytes)
-    # --- RETURN TARGET (0x40) ---
-    sw(5, 0, 10),                            # 0x40: Output x5 to UART TX (0xFFFF0000)
-    sw(5, 4, 10),                            # 0x44: Output x5 to Board LEDs (0xFFFF0004)
-    jal(0, 0),                               # 0x48: Halt loop
-    # --- SUBROUTINE (0x4C) ---
-    sw(1, 0, 11),                            # 0x4C: Save RA (x1) to RAM stack [0x1000]
-    addi(7, 0, 7),                           # 0x50: x7 = 7
-    r_type(5, 5, 7, funct3=4, funct7=0x01),  # 0x54: DIV x5 = 620 / 7 = 88 (0x58)
-    lw(1, 0, 11),                            # 0x58: Restore RA (x1) from RAM stack [0x1000]
-    jalr(0, 1, 0)                            # 0x5C: JALR -> Return to 0x40
+    jal(1, 16),                              # 0x34: JAL x1 -> Subroutine at 0x44 (+16 bytes)
+    # --- RETURN TARGET (0x38) ---
+    sw(5, 0, 10),                            # 0x38: Output x5 to UART TX (0xFFFF0000)
+    sw(5, 4, 10),                            # 0x3C: Output x5 to Board LEDs (0xFFFF0004)
+    WFI_BYTES,                               # 0x40: WFI Idle Mode Halt
+    # --- SUBROUTINE (0x44) ---
+    addi(7, 0, 7),                           # 0x44: x7 = 7
+    r_type(5, 5, 7, funct3=4, funct7=0x01),  # 0x48: DIV x5 = 620 / 7 = 88 (0x58)
+    jalr(0, 1, 0)                            # 0x4C: JALR -> Return to 0x38
 ])
 
 def main():

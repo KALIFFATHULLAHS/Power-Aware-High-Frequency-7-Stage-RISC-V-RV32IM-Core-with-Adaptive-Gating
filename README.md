@@ -1,19 +1,29 @@
 # Power-Aware High-Frequency 7-Stage RISC-V RV32IM Core with Adaptive Gating
 
-An advanced, power-optimized 32-bit RISC-V processor core designed for high-frequency operations on Xilinx 7-Series FPGAs. The core implements the RV32IM instruction set architecture with dynamic, stage-level adaptive clock gating, approximate arithmetic mode, WFI idle shutdown, and a UART-based bootloader.
+An advanced, power-optimized 32-bit RISC-V soft processor designed for high-frequency operation on Xilinx 7-Series FPGAs. The core implements the RV32IM ISA with a **Pipeline-State-Aware Adaptive Activity Controller (PSA-Gate)**, dynamic functional-unit clock gating, approximate arithmetic mode, WFI idle shutdown, and a UART bootloader.
+
+---
+
+## 🔬 Research & Microarchitectural Novelty Framing (PSA-Gate)
+
+Rather than claiming standard building blocks (7-stage pipeline, branch prediction, forwarding, or basic clock gating) as novelty, this project centers on the **microarchitectural trade-off** between deep-pipeline timing optimization ($F_{max}$) and additional pipeline register switching activity ($P_{dynamic} = \alpha C V^2 f$).
+
+### Primary Research Contribution
+> **Pipeline-State-Aware Adaptive Activity Management (PSA-Gate):**  
+> A multi-condition control architecture that jointly observes instruction class ($I$), stage valid status ($V$), hazard dependencies ($H$), branch recovery states ($B$), and multi-cycle execution status ($M, D$) to compute a dynamic runtime activity mask ($G$). Unnecessary switching in inactive stages and functional units (e.g., multiplier disabled during division, divider disabled during multiplication) is selectively suppressed using Xilinx `BUFGCE` primitives while preserving timing closure and architectural correctness.
 
 ---
 
 ## 🌟 Key Features
 
-*   **7-Stage Pipeline:** Deeply pipelined architecture (IF1 → IF2 → ID → EX1 → EX2 → MEM → WB) allowing high-frequency execution.
-*   **Adaptive Stage Gating (Dynamic Clock Gating):** Uses a central `stage_gating_controller` and custom Xilinx `BUFGCE` clock buffers in `clock_manager` to dynamically disable pipeline stages and arithmetic units (Multiplier, Divider) when idle, during stalls, or when disabled by power modes.
-*   **Approximate Arithmetic Mode:** Features an energy-saving Approximate ALU mode that truncates the 4 LSBs of operands to reduce active power during non-critical mathematical computations.
-*   **Wait For Interrupt (WFI) Idle Mode:** Shuts down all stage clocks during idle states, entering a ultra-low-power sleep mode until woken up by system triggers.
-*   **Branch Prediction Unit (BPU):** Minimizes branch penalties using hardware branch prediction.
-*   **Full Hazard & Forwarding Support:** Integrated hazard unit resolving Read-After-Write (RAW) and load-use dependencies with minimal stall cycles.
-*   **Dual-Port BRAM & UART Program Loader:** Built-in bootloader allowing users to stream application binaries directly into instruction memory over a serial interface.
-*   **Memory-Mapped I/O (MMIO):** Standardized memory accesses for UART TX communication and LED state indicators.
+*   **7-Stage Deep Pipeline:** Stage separation ($IF1 \rightarrow IF2 \rightarrow ID \rightarrow EX1 \rightarrow EX2 \rightarrow MEM \rightarrow WB$) decoupling BRAM synchronous latency ($IF1/IF2$) and execution critical paths ($EX1/EX2$).
+*   **PSA-Gate Dynamic Activity Control:** Multi-condition gating logic in `stage_gating_controller` controlling custom `BUFGCE` clock buffers in `clock_manager`.
+*   **Mutually Exclusive Functional Unit Gating:** Dynamically disables DSP multiplier when divider is active, and vice versa.
+*   **Approximate Arithmetic Mode:** Features an energy-saving Approximate ALU mode truncating 4 LSBs for non-critical math operations.
+*   **Wait For Interrupt (WFI) Idle Mode:** Full stage clock shutdown entering ultra-low-power idle state.
+*   **Hardware BPU & Forwarding:** 64-entry BTB + 2-bit BHT predictor with multi-stage data forwarding ($EX2 \rightarrow EX1$, $MEM \rightarrow EX1$, $WB \rightarrow ID$).
+*   **Dual-Port BRAM & UART Bootloader:** Direct serial binary streaming into instruction memory.
+*   **Memory-Mapped I/O (MMIO):** UART TX transmission and LED hardware indicators.
 
 ---
 
